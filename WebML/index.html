@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Validação WebML - TensorFlow.js</title>
+    <!-- Importa as bibliotecas do TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
+</head>
+<body style="font-family: Arial; text-align: center; margin-top: 50px;">
+
+    <h1>Validação WebML: TensorFlow.js</h1>
+    <p>Este modelo roda 100% no seu navegador, sem enviar dados para servidores.</p>
+
+    <!-- Elementos da tela -->
+    <input type="file" id="imageSelector" accept="image/*">
+    <br><br>
+    <div style="min-height: 250px;">
+        <img id="minhaImagem" width="300" style="display:none; margin: 0 auto; border-radius: 8px;" crossorigin="anonymous">
+    </div>
+    <h3 id="resultado">A carregar o modelo de IA... Aguarde um momento.</h3>
+
+    <!-- Script de execução -->
+    <script>
+        const statusText = document.getElementById('resultado');
+        const imageSelector = document.getElementById('imageSelector');
+        const imgElement = document.getElementById('minhaImagem');
+
+        let model = null;
+
+        // Carrega o modelo assim que a página abre
+        async function carregarModelo() {
+            try {
+                statusText.innerText = "A carregar o modelo de IA na memória...";
+                model = await mobilenet.load();
+                statusText.innerText = "Modelo carregado com sucesso! Escolha uma imagem acima.";
+            } catch (erro) {
+                statusText.innerText = "Erro ao carregar o modelo. Verifique a sua ligação à internet.";
+                console.error(erro);
+            }
+        }
+
+        // Quando o utilizador escolhe uma imagem
+        imageSelector.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!model) {
+                alert("O modelo ainda não terminou de carregar. Espere mais um segundo.");
+                return;
+            }
+
+            statusText.innerText = "A processar imagem localmente...";
+
+            // Cria uma URL local para o ficheiro escolhido
+            const imageUrl = URL.createObjectURL(file);
+            imgElement.src = imageUrl;
+
+            // Garante que a imagem está totalmente carregada antes de classificar
+            imgElement.onload = async () => {
+                try {
+                    const inicio = performance.now();
+                    const predictions = await model.classify(imgElement);
+                    const fim = performance.now();
+                    const tempoGasto = (fim - inicio).toFixed(2);
+
+                    if (predictions && predictions.length > 0) {
+                        statusText.innerHTML = `
+                            <b>Resultado:</b> ${predictions[0].className} 
+                            (${(predictions[0].probability * 100).toFixed(1)}% de confiança)<br>
+                            <small>⏱️ Tempo de inferência: ${tempoGasto} ms</small>
+                        `;
+                    } else {
+                        statusText.innerText = "Não foi possível classificar a imagem.";
+                    }
+                } catch (err) {
+                    statusText.innerText = "Erro durante a inferência da imagem.";
+                    console.error(err);
+                }
+            };
+
+            imgElement.style.display = 'block';
+        };
+
+        carregarModelo();
+    </script>
+</body>
+</html>
