@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Classificador de Objetos - WebML</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #fff; text-align: center; padding: 20px; }
+        video { border: 3px solid #ff0055; border-radius: 8px; transform: scaleX(-1); }
+        button { padding: 10px 15px; margin: 5px; font-weight: bold; cursor: pointer; background: #ff0055; color: #fff; border: none; border-radius: 4px; }
+        #prediction { font-size: 2.5em; color: #00ffcc; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+    <h1>✊ Pedra, Papel ou Tesoura com WebML</h1>
+    <p>Treine a IA mostrando objetos ou gestos com a mão para cada classe!</p>
+
+    <video id="webcam" autoplay playsinline muted width="224" height="224"></video>
+    
+    <div>
+        <button onclick="addSample(0)">Treinar: PEDRA ✊</button>
+        <button onclick="addSample(1)">Treinar: PAPEL ✋</button>
+        <button onclick="addSample(2)">Treinar: TESOURA ✌️</button>
+    </div>
+    <div>
+        <button onclick="trainModel()" style="background: #00ffcc; color: #000;">🚀 TREINAR MODELO</button>
+    </div>
+
+    <div id="status">A carregar MobileNet...</div>
+    <div id="prediction">Aguardando treino...</div>
+
+    <script>
+        const NUM_CLASSES = 3;
+        const classNames = ["✊ PEDRA", "✋ PAPEL", "✌️ TESOURA"];
+        
+        let truncatedMobileNet, model, webcamIterator;
+        let xs = null, ys = null;
+
+        async function init() {
+            // Carrega o MobileNet truncado (mesma base dos exemplos anteriores)
+            const mobilenet = await tf.loadLayersModel('https://storage.googleapis.com/tfjs-models/tfjs/mobilenet_v1_0.25_224/model.json');
+            truncatedMobileNet = tf.model({inputs: mobilenet.inputs, outputs: mobilenet.getLayer('conv_pw_13_relu').output});
+            
+            webcamIterator = await tf.data.webcam(document.getElementById('webcam'), {resizeWidth: 224, resizeHeight: 224});
+            document.getElementById('status').innerText = "Pronto para coletar amostras!";
+        }
+
+        async function captureActivation() {
+            const img = await webcamIterator.capture();
+            const processed = tf.tidy(() => img.expandDims(0).toFloat().div(127.5).sub(1));
+            const activation = truncatedMobileNet.predict(processed);
+            img.dispose();
+            return activation;
+        }
+
+        async function addSample(classId) {
+            const activation = await captureActivation();
+            const y = tf.tidy(() => tf.oneHot(tf.tensor1d([classId], 'int32'), NUM_CLASSES));
+
+            if (xs === null) {
+                xs = tf.keep(activation);
+                ys = tf.keep(y);
+            } else {
+                const oldXs = xs, oldYs = ys;
+                xs = tf.keep(oldXs.concat(activation, 0));
+                ys = tf.keep(oldYs.concat(y, 0));
+                oldXs.dispose(); oldYs.dispose(); y.dispose();
+            }
+            document.getElementById('status').innerText = `Adicionada amostra para: ${classNames[classId]}`;
+        }
+
+        async function trainModel() {
+            if (!xs) return alert("Adicione amostras primeiro!");
+            document.getElementById('status').innerText = "A treinar...";
+
+            model = tf.sequential({
+                layers: [
+                    tf.layers.flatten({inputShape: truncatedMobileNet.outputs[0].shape.slice(1)}),
+                    tf.layers.dense({units: 64, activation: 'relu'}),
+                    tf.layers.dense({units: NUM_CLASSES, activation: 'softmax'})
+                ]
+            });
+
+            model.compile({optimizer: tf.train.adam(0.0001), loss: 'categoricalCrossentropy'});
+
+            await model.fit(xs, ys, {
+                batchSize: 16, epochs: 15,
+                callbacks: {
+                    onBatchEnd: async (b, logs) => document.getElementById('status').innerText = 'Loss: ' + logs.loss.toFixed(4)
+                }
+            });
+
+            document.getElementById('status').innerText = "✅ Treino Concluído!";
+            predictLoop();
+        }
+
+        async function predictLoop() {
+            while (true) {
+                const activation = await captureActivation();
+                const preds = model.predict(activation);
+                const classId = preds.argMax(-1).dataSync()[0];
+                
+                document.getElementById('prediction').innerText = classNames[classId];
+                
+                activation.dispose();
+                preds.dispose();
+                await tf.nextFrame();
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

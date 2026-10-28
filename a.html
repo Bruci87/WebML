@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Exemplo WebAssembly (Wasm) - TensorFlow.js</title>
+
+    <!-- 1. TensorFlow.js Core -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+    
+    <!-- 2. Backend do WebAssembly (Wasm) -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.17.0/dist/tf-backend-wasm.min.js"></script>
+</head>
+<body style="font-family: monospace; background: #1a1a2e; color: #00fff5; padding: 20px;">
+
+    <h2>⚙️ Demonstração de WebML com WebAssembly (Wasm)</h2>
+    <p style="color: #ccc;">Executa cálculos matemáticos de IA a velocidade quase nativa na CPU.</p>
+
+    <button onclick="executarComWasm()" style="padding: 12px 24px; font-size: 16px; cursor: pointer; background: #00fff5; border: none; font-weight: bold; border-radius: 4px;">
+        Executar Teste na CPU (Wasm)
+    </button>
+
+    <pre id="log" style="margin-top: 20px; font-size: 14px; color: #fff; background: #0f0f1b; padding: 15px; border-radius: 6px;"></pre>
+
+    <script>
+        const logElement = document.getElementById('log');
+
+        function log(mensagem) {
+            logElement.innerText += mensagem + '\n';
+        }
+
+        async function executarComWasm() {
+            logElement.innerText = '';
+            log("1. A configurar o caminho dos ficheiros binários .wasm...");
+
+            // Aponta para os ficheiros binários .wasm carregados via CDN
+            tf.wasm.setWasmPaths('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.17.0/dist/');
+
+            try {
+                // Define o backend ativo para Wasm
+                await tf.setBackend('wasm');
+                await tf.ready();
+
+                log(`✅ Backend ativo: ${tf.getBackend().toUpperCase()}`);
+                log("2. A criar matrizes pesadas (1500x1500) na memória...");
+
+                // Cria dois tensores (matrizes) para multiplicar
+                const a = tf.randomNormal([1500, 1500]);
+                const b = tf.randomNormal([1500, 1500]);
+
+                log("3. A calcular multiplicação matricial via instruções binárias do Wasm...");
+                const inicio = performance.now();
+
+                // Multiplicação de matrizes processada pelo motor C++/Rust compilado em Wasm
+                const c = tf.matMul(a, b);
+                await c.data(); // Força a conclusão da operação
+
+                const fim = performance.now();
+                const tempo = (fim - inicio).toFixed(2);
+
+                log(`🚀 Sucesso! Operação concluída em: ${tempo} ms`);
+
+                // Libertar memória dos tensores
+                tf.dispose([a, b, c]);
+
+            } catch (erro) {
+                log("❌ Erro ao inicializar o backend Wasm: " + erro.message);
+                console.error(erro);
+            }
+        }
+    </script>
+</body>
+</html>

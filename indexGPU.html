@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Exemplo WebGPU - TensorFlow.js</title>
+    <!-- Core do TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+    <!-- Backend do WebGPU -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgpu@4.17.0/dist/tf-backend-webgpu.min.js"></script>
+</head>
+<body style="font-family: monospace; background: #121212; color: #00ffcc; padding: 20px;">
+
+    <h2>Demosntração WebGPU na Prática</h2>
+    <button onclick="rodarWebGPU()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">
+        Executar Cálculo na GPU
+    </button>
+
+    <pre id="log" style="margin-top: 20px; font-size: 14px; color: #fff;"></pre>
+
+    <script>
+        const logElement = document.getElementById('log');
+
+        function log(mensagem) {
+            logElement.innerText += mensagem + '\n';
+        }
+
+        async function rodarWebGPU() {
+            logElement.innerText = '';
+            log("1. A verificar suporte para WebGPU...");
+
+            // 1. Verifica se a API WebGPU existe no navegador
+            if (!navigator.gpu) {
+                log("❌ WebGPU não suportado neste navegador/sistema. Tente atualizar ou usar Chrome/Brave.");
+                return;
+            }
+
+            try {
+                // 2. Define o backend do TensorFlow.js para WebGPU
+                await tf.setBackend('webgpu');
+                await tf.ready();
+
+                log(`✅ Backend ativo: ${tf.getBackend().toUpperCase()}`);
+                log("2. A criar matrizes na memória da GPU (2000x2000)...");
+
+                // 3. Cria dois tensores (matrizes) grandes diretamente na GPU
+                const a = tf.randomNormal([2000, 2000]);
+                const b = tf.randomNormal([2000, 2000]);
+
+                log("3. A calcular multiplicação matricial...");
+                const inicio = performance.now();
+
+                // Executa a multiplicação matricial na GPU
+                const c = tf.matMul(a, b);
+                
+                // Força a sincronização com a GPU para medir o tempo exato
+                await c.data();
+
+                const fim = performance.now();
+                const tempo = (fim - inicio).toFixed(2);
+
+                log(`🚀 Sucesso! Cálculo concluído em: ${tempo} ms`);
+
+                // Limpa a memória da GPU
+                tf.dispose([a, b, c]);
+
+            } catch (erro) {
+                log("❌ Erro ao inicializar WebGPU: " + erro.message);
+                console.error(erro);
+            }
+        }
+    </script>
+</body>
+</html>
